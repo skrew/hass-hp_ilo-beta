@@ -226,33 +226,66 @@ class HpIloData:
 
 
 
-class HpIloDeviceSensor(HpIloSensor):
+class HpIloDeviceSensor(SensorEntity):
 
     def __init__(
         self,
         hass: HomeAssistant,
         hp_ilo_data: HpIloData,
-        sensor_type,
-        sensor_name,
-        sensor_value_template:template.Template,
-        unit_of_measurement,
-        device_class,
-        state_class,
+        sensor_type: str,
+        sensor_name: str,
+        sensor_value_template: template.Template | None,
+        unit_of_measurement: str | None,
+        device_class: SensorDeviceClass | None,
+        state_class: SensorStateClass | None,
         entry: ConfigEntry,
         device_info: DeviceInfo,
-        options=None
+        options: tuple[str, ...] | None = None
     ) -> None:
         """Initialize the HpIlo entity."""
-        super().__init__(hass=hass, hp_ilo_data=hp_ilo_data, sensor_type=sensor_type, sensor_name=sensor_name,
-        sensor_value_template=sensor_value_template,unit_of_measurement=unit_of_measurement,
-        device_class=device_class,state_class=state_class,options=options)
         self._hass = hass
-
-        self._entry_id = entry.entry_id 
+        self._entry_id = entry.entry_id
         self._attr_device_info = device_info
-        self._attr_unique_id = f"{entry.data['unique_id']}_{sensor_name}"
-    
-    
+
+        base_device_id = entry.unique_id if entry.unique_id is not None else entry.entry_id
+        self._attr_unique_id = f"{base_device_id}_{sensor_name.replace(' ', '_').lower()}"
+
+        device_actual_name = device_info.get("name", entry.title) if device_info else entry.title
+        self._attr_name = f"{device_actual_name} {sensor_name}"
+
+        self.hp_ilo_data = hp_ilo_data
+        self._ilo_function_name = SENSOR_TYPES[sensor_type][1]
+        self._sensor_value_template = sensor_value_template
+        if self._sensor_value_template is not None:
+            self._sensor_value_template.hass = hass
+
+        self._attr_native_unit_of_measurement = unit_of_measurement
+        self._attr_device_class = device_class
+        self._attr_state_class = state_class
+        if options:
+            self._attr_options = list(options)
+
+        self._attr_should_poll = True
+
+
+    def update(self) -> None:
+        """Get the latest data from HP iLO and updates the states."""
+        try:
+            self.hp_ilo_data.update()
+
+            raw_value = getattr(self.hp_ilo_data.data, self._ilo_function_name)()
+
+            if self._sensor_value_template is not None:
+                self._attr_native_value = self._sensor_value_template.render(
+                    ilo_data=raw_value, parse_result=False
+                )
+            else:
+                self._attr_native_value = raw_value
+        except Exception as e:
+            _LOGGER.error(f"Error updating sensor {self.name} ({self._ilo_function_name}): {e}")
+            self._attr_native_value = None
+
+
 '''
 Setup device and sensor entities for a config entry
 '''
