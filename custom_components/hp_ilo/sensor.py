@@ -249,9 +249,7 @@ class HpIloDeviceSensor(SensorEntity):
 
         base_device_id = entry.unique_id if entry.unique_id is not None else entry.entry_id
         self._attr_unique_id = f"{base_device_id}_{sensor_name.replace(' ', '_').lower()}"
-
-        device_actual_name = device_info.get("name", entry.title) if device_info else entry.title
-        self._attr_name = f"{device_actual_name} {sensor_name}"
+        self._attr_name = sensor_name
 
         self.hp_ilo_data = hp_ilo_data
         self._ilo_function_name = SENSOR_TYPES[sensor_type][1]
